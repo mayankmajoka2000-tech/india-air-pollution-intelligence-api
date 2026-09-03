@@ -1,10 +1,15 @@
 from pathlib import Path
+import time
+
 import pandas as pd
 import numpy as np
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 
 
 # ============================================================
@@ -13,9 +18,9 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 DATA_PATH = Path("data/india_air_quality_total_320000.csv")
 
-print("=" * 60)
-print("INDIA AIR POLLUTION ML TRAINING PIPELINE")
-print("=" * 60)
+print("=" * 70)
+print("INDIA AIR POLLUTION ML MODEL COMPARISON")
+print("=" * 70)
 
 print("\nLoading dataset...")
 
@@ -32,7 +37,9 @@ print("Columns:", len(df.columns))
 
 print("\nChecking data quality...")
 
-print("Missing values:", int(df.isna().sum().sum()))
+missing_values = int(df.isna().sum().sum())
+
+print("Missing values:", missing_values)
 
 df = df.dropna()
 
@@ -90,7 +97,7 @@ print("-", target)
 
 
 # ============================================================
-# 5. PREPARE X AND y
+# 5. PREPARE DATA
 # ============================================================
 
 X = df[features]
@@ -118,108 +125,215 @@ print("Testing records:", len(X_test))
 
 
 # ============================================================
-# 7. TRAIN RANDOM FOREST MODEL
+# 7. DEFINE MODELS
 # ============================================================
 
-print("\nTraining Random Forest model...")
+models = {
 
-model = RandomForestRegressor(
-    n_estimators=100,
-    max_depth=15,
-    random_state=42,
-    n_jobs=-1
-)
+    "Random Forest": RandomForestRegressor(
+        n_estimators=100,
+        max_depth=15,
+        random_state=42,
+        n_jobs=-1
+    ),
 
-model.fit(X_train, y_train)
+    "XGBoost": XGBRegressor(
+        n_estimators=200,
+        max_depth=8,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        n_jobs=-1,
+        objective="reg:squarederror"
+    ),
 
-print("Model training completed.")
+    "LightGBM": LGBMRegressor(
+        n_estimators=200,
+        max_depth=8,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        n_jobs=-1,
+        verbosity=-1
+    )
+}
 
 
 # ============================================================
-# 8. GENERATE PREDICTIONS
+# 8. TRAIN AND EVALUATE MODELS
 # ============================================================
 
-print("\nGenerating predictions...")
+results = []
 
-y_pred = model.predict(X_test)
+feature_importance_results = {}
 
+for name, model in models.items():
 
-# ============================================================
-# 9. MODEL EVALUATION
-# ============================================================
+    print("\n" + "=" * 70)
+    print(f"TRAINING: {name}")
+    print("=" * 70)
 
-mae = mean_absolute_error(
-    y_test,
-    y_pred
-)
+    start_time = time.time()
 
-rmse = np.sqrt(
-    mean_squared_error(
+    model.fit(
+        X_train,
+        y_train
+    )
+
+    training_time = time.time() - start_time
+
+    print("Training completed.")
+
+    # --------------------------------------------------------
+    # Predictions
+    # --------------------------------------------------------
+
+    y_pred = model.predict(X_test)
+
+    # --------------------------------------------------------
+    # Metrics
+    # --------------------------------------------------------
+
+    mae = mean_absolute_error(
         y_test,
         y_pred
     )
-)
 
-r2 = r2_score(
-    y_test,
-    y_pred
-)
+    rmse = np.sqrt(
+        mean_squared_error(
+            y_test,
+            y_pred
+        )
+    )
 
+    r2 = r2_score(
+        y_test,
+        y_pred
+    )
 
-print("\n" + "=" * 60)
-print("MODEL PERFORMANCE")
-print("=" * 60)
+    print(f"MAE  : {mae:.4f}")
+    print(f"RMSE : {rmse:.4f}")
+    print(f"R²   : {r2:.4f}")
+    print(f"Training Time: {training_time:.2f} seconds")
 
-print(f"MAE  : {mae:.4f}")
-print(f"RMSE : {rmse:.4f}")
-print(f"R²   : {r2:.4f}")
+    # --------------------------------------------------------
+    # Store results
+    # --------------------------------------------------------
+
+    results.append({
+        "model": name,
+        "MAE": mae,
+        "RMSE": rmse,
+        "R2": r2,
+        "training_time_seconds": training_time
+    })
+
+    # --------------------------------------------------------
+    # Feature importance
+    # --------------------------------------------------------
+
+    if hasattr(model, "feature_importances_"):
+
+        importance = pd.DataFrame({
+            "feature": features,
+            "importance": model.feature_importances_
+        })
+
+        importance = importance.sort_values(
+            "importance",
+            ascending=False
+        )
+
+        feature_importance_results[name] = importance
 
 
 # ============================================================
-# 10. FEATURE IMPORTANCE
+# 9. MODEL COMPARISON
 # ============================================================
 
-importance = pd.DataFrame({
-    "feature": features,
-    "importance": model.feature_importances_
-})
+results_df = pd.DataFrame(results)
 
-importance = importance.sort_values(
-    "importance",
+results_df = results_df.sort_values(
+    "R2",
     ascending=False
 )
 
-
-print("\n" + "=" * 60)
-print("FEATURE IMPORTANCE")
-print("=" * 60)
+print("\n" + "=" * 70)
+print("MODEL COMPARISON")
+print("=" * 70)
 
 print(
-    importance.to_string(index=False)
+    results_df.to_string(index=False)
 )
 
 
 # ============================================================
-# 11. SAVE MODEL RESULTS
+# 10. SELECT BEST MODEL
 # ============================================================
 
-OUTPUT_PATH = Path(
-    "data/model_results.csv"
+best_model = results_df.iloc[0]
+
+print("\n" + "=" * 70)
+print("BEST MODEL")
+print("=" * 70)
+
+print("Model:", best_model["model"])
+print(f"MAE: {best_model['MAE']:.4f}")
+print(f"RMSE: {best_model['RMSE']:.4f}")
+print(f"R²: {best_model['R2']:.4f}")
+
+
+# ============================================================
+# 11. SAVE MODEL COMPARISON
+# ============================================================
+
+RESULTS_PATH = Path(
+    "data/model_comparison.csv"
 )
 
-importance.to_csv(
-    OUTPUT_PATH,
+results_df.to_csv(
+    RESULTS_PATH,
     index=False
 )
 
-print("\nFeature importance saved to:")
-print(OUTPUT_PATH)
+print("\nModel comparison saved to:")
+print(RESULTS_PATH)
 
 
 # ============================================================
-# 12. FINAL STATUS
+# 12. SAVE FEATURE IMPORTANCE
 # ============================================================
 
-print("\n" + "=" * 60)
-print("TRAINING PIPELINE COMPLETED SUCCESSFULLY")
-print("=" * 60)
+for model_name, importance_df in feature_importance_results.items():
+
+    safe_name = (
+        model_name
+        .lower()
+        .replace(" ", "_")
+    )
+
+    output_path = Path(
+        f"data/{safe_name}_feature_importance.csv"
+    )
+
+    importance_df.to_csv(
+        output_path,
+        index=False
+    )
+
+    print(
+        f"{model_name} feature importance saved to:"
+    )
+
+    print(output_path)
+
+
+# ============================================================
+# 13. FINAL STATUS
+# ============================================================
+
+print("\n" + "=" * 70)
+print("MODEL COMPARISON COMPLETED SUCCESSFULLY")
+print("=" * 70)
