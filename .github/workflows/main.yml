@@ -31,3 +31,7 @@ jobs:
           PYTHONPATH: .
         run: |
           python -m pytest -q
+
+      - name: Train ML model
+        run: |
+          python scripts/train_models.py
