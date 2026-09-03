@@ -1,3 +1,12 @@
+# India Air Pollution Intelligence API
+
+🚀 **Live API:** https://india-air-pollution-intelligence-api.onrender.com
+
+📚 **Interactive Swagger Documentation:** https://india-air-pollution-intelligence-api.onrender.com/docs
+
+❤️ **Health Check:** https://india-air-pollution-intelligence-api.onrender.com/health
+
+📊 **Dataset:** 320,000 synthetic India-level air-quality records
 # India Air Pollution Intelligence API — ULTIMATE v5.0
 
 ## Run
