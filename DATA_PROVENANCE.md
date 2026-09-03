@@ -1,0 +1,1 @@
+The included 320,000-record development dataset is synthetic. It must not be represented as official CPCB/PRANA/OpenAQ observations. Production ingestion must retain source provenance and licensing information.
