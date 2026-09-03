@@ -36,7 +36,7 @@ jobs:
       - name: Verify dataset
         run: |
           ls -lh data/india_air_quality_total_320000.csv
-          python -c "import pandas as pd; df=pd.read_csv('data/india_air_quality_total_320000.csv'); print('Dataset records:', len(df)); print('Dataset columns:', len(df.columns))"
+          python -c "import pandas as pd; df=pd.read_csv('data/india_air_quality_total_320000.csv'); print('Dataset records:', len(df)); print('Dataset columns:', len(df.columns)); print('Column names:'); print(df.columns.tolist())"
 
       - name: Run tests
         env:
