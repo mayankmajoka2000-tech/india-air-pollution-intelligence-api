@@ -44,35 +44,53 @@ print("Records after removing missing values:", len(df))
 # ============================================================
 
 features = [
-    "PM10",
-    "NO2",
-    "SO2",
-    "CO",
-    "O3",
-    "NH3",
-    "Pb",
-    "temperature",
-    "humidity",
-    "wind_speed",
-    "wind_direction",
-    "rainfall",
-    "pressure"
+    "PM10_ug_m3",
+    "NO2_ug_m3",
+    "SO2_ug_m3",
+    "CO_mg_m3",
+    "O3_ug_m3",
+    "NH3_ug_m3",
+    "Pb_ug_m3",
+    "temperature_C",
+    "relative_humidity_pct",
+    "wind_speed_m_s",
+    "wind_direction_deg",
+    "rainfall_mm",
+    "pressure_hPa"
 ]
 
-target = "PM2.5"
-
-# Keep only columns available in dataset
-features = [col for col in features if col in df.columns]
-
-print("\nFeatures used:")
-print(features)
-
-print("\nTarget variable:")
-print(target)
+target = "PM25_ug_m3"
 
 
 # ============================================================
-# 4. PREPARE X AND y
+# 4. VERIFY REQUIRED COLUMNS
+# ============================================================
+
+required_columns = features + [target]
+
+missing_columns = [
+    column
+    for column in required_columns
+    if column not in df.columns
+]
+
+if missing_columns:
+    raise ValueError(
+        f"Missing required columns: {missing_columns}"
+    )
+
+
+print("\nFeatures used:")
+
+for feature in features:
+    print("-", feature)
+
+print("\nTarget variable:")
+print("-", target)
+
+
+# ============================================================
+# 5. PREPARE X AND y
 # ============================================================
 
 X = df[features]
@@ -83,7 +101,7 @@ print("y shape:", y.shape)
 
 
 # ============================================================
-# 5. TRAIN-TEST SPLIT
+# 6. TRAIN-TEST SPLIT
 # ============================================================
 
 print("\nCreating train-test split...")
@@ -100,7 +118,7 @@ print("Testing records:", len(X_test))
 
 
 # ============================================================
-# 6. TRAIN RANDOM FOREST MODEL
+# 7. TRAIN RANDOM FOREST MODEL
 # ============================================================
 
 print("\nTraining Random Forest model...")
@@ -118,7 +136,7 @@ print("Model training completed.")
 
 
 # ============================================================
-# 7. PREDICTIONS
+# 8. GENERATE PREDICTIONS
 # ============================================================
 
 print("\nGenerating predictions...")
@@ -127,12 +145,26 @@ y_pred = model.predict(X_test)
 
 
 # ============================================================
-# 8. MODEL EVALUATION
+# 9. MODEL EVALUATION
 # ============================================================
 
-mae = mean_absolute_error(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-r2 = r2_score(y_test, y_pred)
+mae = mean_absolute_error(
+    y_test,
+    y_pred
+)
+
+rmse = np.sqrt(
+    mean_squared_error(
+        y_test,
+        y_pred
+    )
+)
+
+r2 = r2_score(
+    y_test,
+    y_pred
+)
+
 
 print("\n" + "=" * 60)
 print("MODEL PERFORMANCE")
@@ -144,7 +176,7 @@ print(f"R²   : {r2:.4f}")
 
 
 # ============================================================
-# 9. FEATURE IMPORTANCE
+# 10. FEATURE IMPORTANCE
 # ============================================================
 
 importance = pd.DataFrame({
@@ -157,15 +189,23 @@ importance = importance.sort_values(
     ascending=False
 )
 
-print("\nFeature Importance:")
-print(importance.to_string(index=False))
+
+print("\n" + "=" * 60)
+print("FEATURE IMPORTANCE")
+print("=" * 60)
+
+print(
+    importance.to_string(index=False)
+)
 
 
 # ============================================================
-# 10. SAVE MODEL RESULTS
+# 11. SAVE MODEL RESULTS
 # ============================================================
 
-OUTPUT_PATH = Path("data/model_results.csv")
+OUTPUT_PATH = Path(
+    "data/model_results.csv"
+)
 
 importance.to_csv(
     OUTPUT_PATH,
@@ -175,4 +215,11 @@ importance.to_csv(
 print("\nFeature importance saved to:")
 print(OUTPUT_PATH)
 
-print("\nTraining pipeline completed successfully.")
+
+# ============================================================
+# 12. FINAL STATUS
+# ============================================================
+
+print("\n" + "=" * 60)
+print("TRAINING PIPELINE COMPLETED SUCCESSFULLY")
+print("=" * 60)
