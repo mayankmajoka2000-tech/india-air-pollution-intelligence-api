@@ -1,5 +1,6 @@
 from pathlib import Path
 import time
+import joblib
 
 import pandas as pd
 import numpy as np
@@ -13,10 +14,18 @@ from lightgbm import LGBMRegressor
 
 
 # ============================================================
-# 1. LOAD DATASET
+# 1. PATHS
 # ============================================================
 
 DATA_PATH = Path("data/india_air_quality_total_320000.csv")
+MODEL_DIR = Path("data/models")
+
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ============================================================
+# 2. LOAD DATASET
+# ============================================================
 
 print("=" * 70)
 print("INDIA AIR POLLUTION ML MODEL COMPARISON")
@@ -32,14 +41,12 @@ print("Columns:", len(df.columns))
 
 
 # ============================================================
-# 2. DATA QUALITY CHECK
+# 3. DATA QUALITY
 # ============================================================
 
 print("\nChecking data quality...")
 
-missing_values = int(df.isna().sum().sum())
-
-print("Missing values:", missing_values)
+print("Missing values:", int(df.isna().sum().sum()))
 
 df = df.dropna()
 
@@ -47,7 +54,7 @@ print("Records after removing missing values:", len(df))
 
 
 # ============================================================
-# 3. FEATURE SELECTION
+# 4. FEATURES AND TARGET
 # ============================================================
 
 features = [
@@ -70,7 +77,7 @@ target = "PM25_ug_m3"
 
 
 # ============================================================
-# 4. VERIFY REQUIRED COLUMNS
+# 5. VERIFY COLUMNS
 # ============================================================
 
 required_columns = features + [target]
@@ -97,7 +104,7 @@ print("-", target)
 
 
 # ============================================================
-# 5. PREPARE DATA
+# 6. PREPARE DATA
 # ============================================================
 
 X = df[features]
@@ -108,7 +115,7 @@ print("y shape:", y.shape)
 
 
 # ============================================================
-# 6. TRAIN-TEST SPLIT
+# 7. TRAIN-TEST SPLIT
 # ============================================================
 
 print("\nCreating train-test split...")
@@ -125,7 +132,7 @@ print("Testing records:", len(X_test))
 
 
 # ============================================================
-# 7. DEFINE MODELS
+# 8. DEFINE MODELS
 # ============================================================
 
 models = {
@@ -162,12 +169,13 @@ models = {
 
 
 # ============================================================
-# 8. TRAIN AND EVALUATE MODELS
+# 9. TRAIN MODELS
 # ============================================================
 
 results = []
-
 feature_importance_results = {}
+
+trained_models = {}
 
 for name, model in models.items():
 
@@ -218,10 +226,6 @@ for name, model in models.items():
     print(f"R²   : {r2:.4f}")
     print(f"Training Time: {training_time:.2f} seconds")
 
-    # --------------------------------------------------------
-    # Store results
-    # --------------------------------------------------------
-
     results.append({
         "model": name,
         "MAE": mae,
@@ -229,6 +233,8 @@ for name, model in models.items():
         "R2": r2,
         "training_time_seconds": training_time
     })
+
+    trained_models[name] = model
 
     # --------------------------------------------------------
     # Feature importance
@@ -250,7 +256,7 @@ for name, model in models.items():
 
 
 # ============================================================
-# 9. MODEL COMPARISON
+# 10. MODEL COMPARISON
 # ============================================================
 
 results_df = pd.DataFrame(results)
@@ -270,23 +276,62 @@ print(
 
 
 # ============================================================
-# 10. SELECT BEST MODEL
+# 11. SELECT BEST MODEL
 # ============================================================
 
-best_model = results_df.iloc[0]
+best_model_name = results_df.iloc[0]["model"]
+best_model = trained_models[best_model_name]
 
 print("\n" + "=" * 70)
 print("BEST MODEL")
 print("=" * 70)
 
-print("Model:", best_model["model"])
-print(f"MAE: {best_model['MAE']:.4f}")
-print(f"RMSE: {best_model['RMSE']:.4f}")
-print(f"R²: {best_model['R2']:.4f}")
+print("Model:", best_model_name)
+print(
+    f"MAE: {results_df.iloc[0]['MAE']:.4f}"
+)
+print(
+    f"RMSE: {results_df.iloc[0]['RMSE']:.4f}"
+)
+print(
+    f"R²: {results_df.iloc[0]['R2']:.4f}"
+)
 
 
 # ============================================================
-# 11. SAVE MODEL COMPARISON
+# 12. SAVE BEST MODEL
+# ============================================================
+
+BEST_MODEL_PATH = MODEL_DIR / "best_pm25_model.joblib"
+
+joblib.dump(
+    best_model,
+    BEST_MODEL_PATH
+)
+
+print("\nBest model saved to:")
+print(BEST_MODEL_PATH)
+
+
+# ============================================================
+# 13. SAVE FEATURE LIST
+# ============================================================
+
+FEATURE_PATH = MODEL_DIR / "model_features.csv"
+
+pd.DataFrame({
+    "feature": features
+}).to_csv(
+    FEATURE_PATH,
+    index=False
+)
+
+print("Model feature list saved to:")
+print(FEATURE_PATH)
+
+
+# ============================================================
+# 14. SAVE MODEL COMPARISON
 # ============================================================
 
 RESULTS_PATH = Path(
@@ -298,12 +343,12 @@ results_df.to_csv(
     index=False
 )
 
-print("\nModel comparison saved to:")
+print("Model comparison saved to:")
 print(RESULTS_PATH)
 
 
 # ============================================================
-# 12. SAVE FEATURE IMPORTANCE
+# 15. SAVE FEATURE IMPORTANCE
 # ============================================================
 
 for model_name, importance_df in feature_importance_results.items():
@@ -331,9 +376,12 @@ for model_name, importance_df in feature_importance_results.items():
 
 
 # ============================================================
-# 13. FINAL STATUS
+# 16. FINAL STATUS
 # ============================================================
 
 print("\n" + "=" * 70)
-print("MODEL COMPARISON COMPLETED SUCCESSFULLY")
+print("MODEL TRAINING AND SAVING COMPLETED SUCCESSFULLY")
 print("=" * 70)
+
+print("Selected model:", best_model_name)
+print("Saved model:", BEST_MODEL_PATH)
