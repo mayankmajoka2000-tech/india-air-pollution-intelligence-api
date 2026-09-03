@@ -26,6 +26,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Download 320,000 record dataset
+        run: |
+          mkdir -p data
+          curl -L \
+            -o data/india_air_quality_total_320000.csv \
+            https://github.com/mayankmajoka2000-tech/india-air-pollution-intelligence-api/releases/download/v5.0.0-data/india_air_quality_total_320000.csv
+
+      - name: Verify dataset
+        run: |
+          ls -lh data/india_air_quality_total_320000.csv
+          python -c "import pandas as pd; df=pd.read_csv('data/india_air_quality_total_320000.csv'); print('Dataset records:', len(df)); print('Dataset columns:', len(df.columns))"
+
       - name: Run tests
         env:
           PYTHONPATH: .
