@@ -13,18 +13,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # ============================================================
+      # 1. CHECKOUT REPOSITORY
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+
+      # ============================================================
+      # 2. SET UP PYTHON
+      # ============================================================
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+
+      # ============================================================
+      # 3. INSTALL DEPENDENCIES
+      # ============================================================
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+
+      # ============================================================
+      # 4. DOWNLOAD DATASET
+      # ============================================================
 
       - name: Download 320,000 record dataset
         run: |
@@ -33,10 +53,20 @@ jobs:
             -o data/india_air_quality_total_320000.csv \
             https://github.com/mayankmajoka2000-tech/india-air-pollution-intelligence-api/releases/download/v5.0.0-data/india_air_quality_total_320000.csv
 
+
+      # ============================================================
+      # 5. VERIFY DATASET
+      # ============================================================
+
       - name: Verify dataset
         run: |
           ls -lh data/india_air_quality_total_320000.csv
           python -c "import pandas as pd; df=pd.read_csv('data/india_air_quality_total_320000.csv'); print('Dataset records:', len(df)); print('Dataset columns:', len(df.columns)); print('Column names:'); print(df.columns.tolist())"
+
+
+      # ============================================================
+      # 6. RUN TESTS
+      # ============================================================
 
       - name: Run tests
         env:
@@ -44,15 +74,50 @@ jobs:
         run: |
           python -m pytest -q
 
+
+      # ============================================================
+      # 7. TRAIN ML MODEL
+      # ============================================================
+
       - name: Train ML model
         run: |
           python scripts/train_models.py
+
+
+      # ============================================================
+      # 8. VERIFY TRAINED MODEL
+      # ============================================================
+
+      - name: Verify trained model
+        run: |
+          ls -lh data/models/
+          test -f data/models/best_pm25_model.joblib
+          echo "Trained Random Forest model exists."
+
+
+      # ============================================================
+      # 9. CREATE MODEL PACKAGE
+      # ============================================================
+
+      - name: Create ML model package
+        run: |
+          cd data/models
+          zip trained-pm25-model.zip \
+            best_pm25_model.joblib \
+            model_features.csv
+          cd ../..
+          ls -lh data/models/trained-pm25-model.zip
+
+
+      # ============================================================
+      # 10. UPLOAD MODEL ARTIFACT
+      # ============================================================
 
       - name: Upload trained ML model
         uses: actions/upload-artifact@v4
         with:
           name: trained-pm25-model
           path: |
-            data/models/best_pm25_model.joblib
-            data/models/model_features.csv
+            data/models/trained-pm25-model.zip
             data/model_comparison.csv
+            data/models/model_features.csv
