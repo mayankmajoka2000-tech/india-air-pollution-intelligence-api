@@ -7,6 +7,10 @@ router = APIRouter(
 )
 
 
+# ============================================================
+# MSME INPUT MODEL
+# ============================================================
+
 class MSME(BaseModel):
     sector: str
     fuel_consumption: float = Field(ge=0)
@@ -14,55 +18,101 @@ class MSME(BaseModel):
     annual_output: float = Field(gt=0)
 
 
-# Screening-level sector benchmarks.
-# These are development benchmarks for API screening,
-# not official regulatory thresholds.
+# ============================================================
+# TRANSITION SCENARIO INPUT MODEL
+# ============================================================
+
+class TransitionScenario(BaseModel):
+    sector: str
+    fuel_consumption: float = Field(ge=0)
+    electricity_kwh: float = Field(ge=0)
+    annual_output: float = Field(gt=0)
+
+    financing_amount: float = Field(gt=0)
+
+    fuel_reduction_pct: float = Field(
+        ge=0,
+        le=100,
+        default=0
+    )
+
+    electricity_reduction_pct: float = Field(
+        ge=0,
+        le=100,
+        default=0
+    )
+
+
+# ============================================================
+# SECTOR BENCHMARKS
+# ============================================================
+
+# Development-stage screening benchmarks.
+# These are NOT official regulatory thresholds.
+
 SECTOR_BENCHMARKS = {
+
     "manufacturing": {
         "emission_intensity": 2.0
     },
+
     "textile": {
         "emission_intensity": 1.8
     },
+
     "food processing": {
         "emission_intensity": 1.5
     },
+
     "chemical": {
         "emission_intensity": 2.5
     },
+
     "cement": {
         "emission_intensity": 3.0
     },
+
     "metal": {
         "emission_intensity": 2.8
     },
+
     "automotive": {
         "emission_intensity": 2.2
     },
+
     "pharmaceutical": {
         "emission_intensity": 1.6
     },
+
     "default": {
         "emission_intensity": 2.0
     }
 }
 
 
+# ============================================================
+# EMISSION CALCULATION FUNCTION
+# ============================================================
+
 def calculate_emissions(x: MSME):
 
+    # Fuel emission factor
     fuel_co2e = (
         x.fuel_consumption * 2.75
     )
 
+    # Electricity emission factor
     electricity_co2e = (
         x.electricity_kwh * 0.70
     )
 
+    # Total emissions
     total_co2e = (
         fuel_co2e
         + electricity_co2e
     )
 
+    # Emission intensity
     intensity = (
         total_co2e
         / x.annual_output
@@ -76,26 +126,39 @@ def calculate_emissions(x: MSME):
     }
 
 
+# ============================================================
+# SECTOR BENCHMARK FUNCTION
+# ============================================================
+
 def get_sector_benchmark(sector: str):
 
-    sector_key = sector.strip().lower()
+    sector_key = (
+        sector.strip().lower()
+    )
 
     benchmark = SECTOR_BENCHMARKS.get(
         sector_key,
         SECTOR_BENCHMARKS["default"]
     )
 
-    benchmark_source = (
-        "sector-specific development benchmark"
-        if sector_key in SECTOR_BENCHMARKS
-        else "default development benchmark"
-    )
+    if sector_key in SECTOR_BENCHMARKS:
+        benchmark_source = (
+            "sector-specific development benchmark"
+        )
+    else:
+        benchmark_source = (
+            "default development benchmark"
+        )
 
     return (
         benchmark["emission_intensity"],
         benchmark_source
     )
 
+
+# ============================================================
+# MSME ASSESSMENT
+# ============================================================
 
 @router.post("/assessment")
 def assessment(x: MSME):
@@ -105,33 +168,42 @@ def assessment(x: MSME):
     total = emissions["total_co2e"]
 
     return {
+
         "status": "success",
+
         "sector": x.sector,
+
         "estimated_co2e": round(
             total,
             2
         ),
+
         "emission_intensity": round(
             emissions["intensity"],
             4
         ),
+
         "fuel_co2e": round(
             emissions["fuel_co2e"],
             2
         ),
+
         "electricity_co2e": round(
             emissions["electricity_co2e"],
             2
         ),
+
         "priority": (
             "High"
             if total > 100000
             else "Standard"
         ),
+
         "method": (
             "Estimated CO2e from fuel consumption "
             "and electricity consumption"
         ),
+
         "interpretation_note": (
             "This is a screening-level estimate "
             "based on the emission factors supplied "
@@ -141,35 +213,43 @@ def assessment(x: MSME):
     }
 
 
+# ============================================================
+# GREEN FINANCE SCREENING
+# ============================================================
+
 @router.post("/green-finance-screening")
 def finance(x: MSME):
 
     emissions = calculate_emissions(x)
 
     total = emissions["total_co2e"]
+
     intensity = emissions["intensity"]
 
-    # ------------------------------------------------
-    # 1. Absolute emission score
-    # ------------------------------------------------
+
+    # --------------------------------------------------------
+    # 1. ABSOLUTE EMISSION SCORE
+    # --------------------------------------------------------
 
     emission_score = max(
         0,
         100 - (total / 10000)
     )
 
-    # ------------------------------------------------
-    # 2. General intensity score
-    # ------------------------------------------------
+
+    # --------------------------------------------------------
+    # 2. GENERAL INTENSITY SCORE
+    # --------------------------------------------------------
 
     intensity_score = max(
         0,
         100 - (intensity * 10)
     )
 
-    # ------------------------------------------------
-    # 3. Sector benchmark comparison
-    # ------------------------------------------------
+
+    # --------------------------------------------------------
+    # 3. SECTOR BENCHMARK
+    # --------------------------------------------------------
 
     benchmark, benchmark_source = (
         get_sector_benchmark(x.sector)
@@ -181,30 +261,48 @@ def finance(x: MSME):
         else None
     )
 
+
+    # --------------------------------------------------------
+    # 4. BENCHMARK PERFORMANCE
+    # --------------------------------------------------------
+
     if benchmark_ratio is not None:
 
         if benchmark_ratio <= 0.75:
-            benchmark_performance = "Better than benchmark"
+
+            benchmark_performance = (
+                "Better than benchmark"
+            )
 
         elif benchmark_ratio <= 1.00:
-            benchmark_performance = "Near benchmark"
+
+            benchmark_performance = (
+                "Near benchmark"
+            )
 
         elif benchmark_ratio <= 1.25:
-            benchmark_performance = "Above benchmark"
+
+            benchmark_performance = (
+                "Above benchmark"
+            )
 
         else:
+
             benchmark_performance = (
                 "Significantly above benchmark"
             )
 
     else:
+
         benchmark_performance = (
             "Benchmark unavailable"
         )
 
-    # Benchmark score:
-    # 100 means performance is at or below
-    # 75% of the benchmark.
+
+    # --------------------------------------------------------
+    # 5. BENCHMARK SCORE
+    # --------------------------------------------------------
+
     if benchmark_ratio is not None:
 
         benchmark_score = max(
@@ -219,16 +317,22 @@ def finance(x: MSME):
         )
 
     else:
+
         benchmark_score = 50
 
-    # ------------------------------------------------
-    # 4. Combined green-finance screening score
-    # ------------------------------------------------
+
+    # --------------------------------------------------------
+    # 6. COMBINED SCREENING SCORE
+    # --------------------------------------------------------
 
     screening_score = (
+
         emission_score * 0.40
+
         + intensity_score * 0.25
+
         + benchmark_score * 0.35
+
     )
 
     screening_score = min(
@@ -239,30 +343,45 @@ def finance(x: MSME):
         )
     )
 
-    # ------------------------------------------------
-    # 5. Finance potential
-    # ------------------------------------------------
+
+    # --------------------------------------------------------
+    # 7. GREEN FINANCE POTENTIAL
+    # --------------------------------------------------------
 
     if screening_score >= 75:
-        eligibility = "High potential"
+
+        eligibility = (
+            "High potential"
+        )
 
     elif screening_score >= 50:
-        eligibility = "Moderate potential"
+
+        eligibility = (
+            "Moderate potential"
+        )
 
     elif screening_score >= 25:
-        eligibility = "Low potential"
+
+        eligibility = (
+            "Low potential"
+        )
 
     else:
-        eligibility = "Requires improvement"
 
-    # ------------------------------------------------
-    # 6. Dominant emission source
-    # ------------------------------------------------
+        eligibility = (
+            "Requires improvement"
+        )
+
+
+    # --------------------------------------------------------
+    # 8. DOMINANT EMISSION SOURCE
+    # --------------------------------------------------------
 
     if (
         emissions["fuel_co2e"]
         > emissions["electricity_co2e"]
     ):
+
         dominant_source = (
             "fuel consumption"
         )
@@ -271,49 +390,73 @@ def finance(x: MSME):
         emissions["electricity_co2e"]
         > emissions["fuel_co2e"]
     ):
+
         dominant_source = (
             "electricity consumption"
         )
 
     else:
-        dominant_source = "balanced"
 
-    # ------------------------------------------------
-    # 7. Recommended transition actions
-    # ------------------------------------------------
+        dominant_source = (
+            "balanced"
+        )
+
+
+    # --------------------------------------------------------
+    # 9. RECOMMENDED ACTIONS
+    # --------------------------------------------------------
 
     recommended_actions = []
 
+
     if emissions["fuel_co2e"] > 0:
+
         recommended_actions.append(
             "clean fuel transition"
         )
 
+
     if emissions["electricity_co2e"] > 0:
+
         recommended_actions.append(
             "energy efficiency and renewable electricity"
         )
 
+
     if benchmark_ratio is not None:
 
         if benchmark_ratio > 1:
+
             recommended_actions.append(
                 "sector-specific emission intensity reduction"
             )
 
         if benchmark_ratio > 1.25:
+
             recommended_actions.append(
                 "prepare an emissions-reduction investment plan"
             )
 
+
     recommended_actions.extend([
+
         "emission monitoring",
+
         "pollution-control equipment",
+
         "resource efficiency"
+
     ])
 
+
+    # --------------------------------------------------------
+    # 10. RESPONSE
+    # --------------------------------------------------------
+
     return {
+
         "status": "success",
+
         "sector": x.sector,
 
         "estimated_co2e": round(
@@ -389,9 +532,13 @@ def finance(x: MSME):
         ),
 
         "scoring_weights": {
+
             "absolute_emissions": 0.40,
+
             "emission_intensity": 0.25,
+
             "sector_benchmark": 0.35
+
         },
 
         "method": (
@@ -412,24 +559,21 @@ def finance(x: MSME):
             "regulatory criteria."
         )
     }
-    class TransitionScenario(BaseModel):
-    sector: str
-    fuel_consumption: float = Field(ge=0)
-    electricity_kwh: float = Field(ge=0)
-    annual_output: float = Field(gt=0)
-    financing_amount: float = Field(gt=0)
-    fuel_reduction_pct: float = Field(ge=0, le=100, default=0)
-    electricity_reduction_pct: float = Field(
-        ge=0,
-        le=100,
-        default=0
-    )
 
+
+# ============================================================
+# MSME GREEN-FINANCE TRANSITION SCENARIO
+# ============================================================
 
 @router.post("/transition-scenario")
-def transition_scenario(x: TransitionScenario):
+def transition_scenario(
+    x: TransitionScenario
+):
 
-    # Current emissions
+    # --------------------------------------------------------
+    # 1. CURRENT / BASELINE EMISSIONS
+    # --------------------------------------------------------
+
     current_fuel_co2e = (
         x.fuel_consumption * 2.75
     )
@@ -443,18 +587,39 @@ def transition_scenario(x: TransitionScenario):
         + current_electricity_co2e
     )
 
-    # Reduced consumption after intervention
+
+    # --------------------------------------------------------
+    # 2. PROJECTED ENERGY CONSUMPTION
+    # --------------------------------------------------------
+
     future_fuel_consumption = (
+
         x.fuel_consumption
-        * (1 - x.fuel_reduction_pct / 100)
+
+        * (
+            1
+            - x.fuel_reduction_pct / 100
+        )
+
     )
+
 
     future_electricity_kwh = (
+
         x.electricity_kwh
-        * (1 - x.electricity_reduction_pct / 100)
+
+        * (
+            1
+            - x.electricity_reduction_pct / 100
+        )
+
     )
 
-    # Future emissions
+
+    # --------------------------------------------------------
+    # 3. PROJECTED EMISSIONS
+    # --------------------------------------------------------
+
     future_fuel_co2e = (
         future_fuel_consumption * 2.75
     )
@@ -468,40 +633,111 @@ def transition_scenario(x: TransitionScenario):
         + future_electricity_co2e
     )
 
-    # Environmental benefit
+
+    # --------------------------------------------------------
+    # 4. ENVIRONMENTAL BENEFIT
+    # --------------------------------------------------------
+
     emission_reduction = (
+
         current_total_co2e
+
         - future_total_co2e
+
     )
+
 
     reduction_pct = (
+
         emission_reduction
+
         / current_total_co2e
+
         * 100
+
         if current_total_co2e > 0
+
         else 0
+
     )
+
+
+    # --------------------------------------------------------
+    # 5. EMISSION INTENSITY
+    # --------------------------------------------------------
 
     current_intensity = (
+
         current_total_co2e
+
         / x.annual_output
+
     )
+
 
     future_intensity = (
+
         future_total_co2e
+
         / x.annual_output
+
     )
 
-    # Environmental return on financing
+
+    # --------------------------------------------------------
+    # 6. CO2E REDUCTION PER UNIT OF FINANCE
+    # --------------------------------------------------------
+
     co2e_reduction_per_finance = (
+
         emission_reduction
+
         / x.financing_amount
+
         if x.financing_amount > 0
+
         else 0
+
     )
+
+
+    # --------------------------------------------------------
+    # 7. FINANCING IMPACT CATEGORY
+    # --------------------------------------------------------
+
+    if reduction_pct >= 30:
+
+        impact_category = (
+            "High environmental impact"
+        )
+
+    elif reduction_pct >= 15:
+
+        impact_category = (
+            "Moderate environmental impact"
+        )
+
+    elif reduction_pct > 0:
+
+        impact_category = (
+            "Low environmental impact"
+        )
+
+    else:
+
+        impact_category = (
+            "No projected emission reduction"
+        )
+
+
+    # --------------------------------------------------------
+    # 8. RESPONSE
+    # --------------------------------------------------------
 
     return {
+
         "status": "success",
+
         "sector": x.sector,
 
         "financing_amount": round(
@@ -510,67 +746,88 @@ def transition_scenario(x: TransitionScenario):
         ),
 
         "baseline": {
+
             "fuel_consumption": round(
                 x.fuel_consumption,
                 2
             ),
+
             "electricity_kwh": round(
                 x.electricity_kwh,
                 2
             ),
+
             "estimated_co2e": round(
                 current_total_co2e,
                 2
             ),
+
             "emission_intensity": round(
                 current_intensity,
                 4
             )
+
         },
 
         "intervention": {
+
             "fuel_reduction_pct": round(
                 x.fuel_reduction_pct,
                 2
             ),
+
             "electricity_reduction_pct": round(
                 x.electricity_reduction_pct,
                 2
             )
+
         },
 
         "projected": {
+
             "fuel_consumption": round(
                 future_fuel_consumption,
                 2
             ),
+
             "electricity_kwh": round(
                 future_electricity_kwh,
                 2
             ),
+
             "estimated_co2e": round(
                 future_total_co2e,
                 2
             ),
+
             "emission_intensity": round(
                 future_intensity,
                 4
             )
+
         },
 
         "environmental_impact": {
+
             "co2e_reduction": round(
                 emission_reduction,
                 2
             ),
+
             "reduction_pct": round(
                 reduction_pct,
                 2
             ),
+
             "co2e_reduction_per_unit_finance": round(
                 co2e_reduction_per_finance,
                 6
+            ),
+
+            "impact_category": (
+                impact_category
             )
+
         },
 
         "method": (
