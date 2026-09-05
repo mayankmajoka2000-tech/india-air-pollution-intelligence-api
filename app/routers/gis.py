@@ -58,9 +58,6 @@ def hotspots():
         ]
     )
 
-    # Aggregate all observations belonging to each station.
-    # Mean latitude/longitude gives one representative
-    # location for each station.
     station_data = (
         df.groupby("station_id", as_index=False)
         .agg(
@@ -73,8 +70,6 @@ def hotspots():
         )
     )
 
-    # Define hotspot threshold as the 90th percentile
-    # of station-level average PM2.5.
     threshold = station_data["average_PM25"].quantile(0.90)
 
     hotspots_df = station_data[
@@ -140,8 +135,95 @@ def hotspots():
 
 @router.get("/stations")
 def stations():
+    df = load_data()
+
+    if df is None:
+        return {
+            "status": "dataset_not_available"
+        }
+
+    required_columns = [
+        "station_id",
+        "city_ulb",
+        "state_ut",
+        "latitude",
+        "longitude",
+        "PM25_ug_m3"
+    ]
+
+    missing = [
+        col for col in required_columns
+        if col not in df.columns
+    ]
+
+    if missing:
+        return {
+            "status": "required_columns_missing",
+            "missing_columns": missing
+        }
+
+    df = df.dropna(
+        subset=[
+            "station_id",
+            "latitude",
+            "longitude",
+            "PM25_ug_m3"
+        ]
+    )
+
+    station_data = (
+        df.groupby("station_id", as_index=False)
+        .agg(
+            city_ulb=("city_ulb", "first"),
+            state_ut=("state_ut", "first"),
+            latitude=("latitude", "mean"),
+            longitude=("longitude", "mean"),
+            average_PM25=("PM25_ug_m3", "mean"),
+            observations=("PM25_ug_m3", "count")
+        )
+    )
+
+    features = []
+
+    for _, row in station_data.iterrows():
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    round(float(row["longitude"]), 6),
+                    round(float(row["latitude"]), 6)
+                ]
+            },
+            "properties": {
+                "station_id": row["station_id"],
+                "city": row["city_ulb"],
+                "state_ut": row["state_ut"],
+                "average_PM25": round(
+                    float(row["average_PM25"]), 2
+                ),
+                "observations": int(row["observations"])
+            }
+        })
+
     return {
-        "output": "GeoJSON-ready station layer"
+        "status": "success",
+        "dataset_records": len(df),
+        "station_count": int(len(station_data)),
+        "method": (
+            "station-level aggregation of average PM2.5 "
+            "from the synthetic development dataset"
+        ),
+        "geojson": {
+            "type": "FeatureCollection",
+            "features": features
+        },
+        "interpretation_note": (
+            "Station locations and pollution values are "
+            "derived from the synthetic development dataset "
+            "and should not be interpreted as official CPCB "
+            "station observations."
+        )
     }
 
 
