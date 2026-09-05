@@ -51,36 +51,38 @@ def hotspots():
 
     df = df.dropna(
         subset=[
+            "station_id",
             "latitude",
             "longitude",
             "PM25_ug_m3"
         ]
     )
 
-    # Aggregate pollution at station level
+    # Aggregate all observations belonging to each station.
+    # Mean latitude/longitude gives one representative
+    # location for each station.
     station_data = (
-        df.groupby(
-            [
-                "station_id",
-                "city_ulb",
-                "state_ut",
-                "latitude",
-                "longitude"
-            ],
-            as_index=False
-        )["PM25_ug_m3"]
-        .mean()
+        df.groupby("station_id", as_index=False)
+        .agg(
+            city_ulb=("city_ulb", "first"),
+            state_ut=("state_ut", "first"),
+            latitude=("latitude", "mean"),
+            longitude=("longitude", "mean"),
+            average_PM25=("PM25_ug_m3", "mean"),
+            observations=("PM25_ug_m3", "count")
+        )
     )
 
     # Define hotspot threshold as the 90th percentile
-    threshold = station_data["PM25_ug_m3"].quantile(0.90)
+    # of station-level average PM2.5.
+    threshold = station_data["average_PM25"].quantile(0.90)
 
     hotspots_df = station_data[
-        station_data["PM25_ug_m3"] >= threshold
+        station_data["average_PM25"] >= threshold
     ].copy()
 
     hotspots_df = hotspots_df.sort_values(
-        "PM25_ug_m3",
+        "average_PM25",
         ascending=False
     ).head(50)
 
@@ -92,8 +94,8 @@ def hotspots():
             "geometry": {
                 "type": "Point",
                 "coordinates": [
-                    float(row["longitude"]),
-                    float(row["latitude"])
+                    round(float(row["longitude"]), 6),
+                    round(float(row["latitude"]), 6)
                 ]
             },
             "properties": {
@@ -101,8 +103,9 @@ def hotspots():
                 "city": row["city_ulb"],
                 "state_ut": row["state_ut"],
                 "average_PM25": round(
-                    float(row["PM25_ug_m3"]), 2
+                    float(row["average_PM25"]), 2
                 ),
+                "observations": int(row["observations"]),
                 "hotspot_threshold": round(
                     float(threshold), 2
                 )
@@ -112,19 +115,25 @@ def hotspots():
     return {
         "status": "success",
         "dataset_records": len(df),
-        "station_count": len(station_data),
-        "hotspot_count": len(features),
-        "method": "station-level PM2.5 90th percentile hotspot detection",
+        "station_count": int(len(station_data)),
+        "hotspot_count": int(len(features)),
+        "hotspot_threshold_PM25": round(
+            float(threshold), 2
+        ),
+        "method": (
+            "station-level PM2.5 90th percentile "
+            "hotspot detection"
+        ),
         "geojson": {
             "type": "FeatureCollection",
             "features": features
         },
         "interpretation_note": (
-            "Hotspots are identified descriptively using the "
-            "90th percentile of station-level average PM2.5 "
-            "in the synthetic development dataset. "
-            "This is not a formal Getis-Ord Gi*, DBSCAN, or KDE "
-            "statistical hotspot analysis."
+            "Hotspots are identified descriptively using "
+            "the 90th percentile of station-level average "
+            "PM2.5 in the synthetic development dataset. "
+            "This is not a formal Getis-Ord Gi*, DBSCAN, "
+            "or KDE statistical hotspot analysis."
         )
     }
 
