@@ -412,3 +412,177 @@ def finance(x: MSME):
             "regulatory criteria."
         )
     }
+    class TransitionScenario(BaseModel):
+    sector: str
+    fuel_consumption: float = Field(ge=0)
+    electricity_kwh: float = Field(ge=0)
+    annual_output: float = Field(gt=0)
+    financing_amount: float = Field(gt=0)
+    fuel_reduction_pct: float = Field(ge=0, le=100, default=0)
+    electricity_reduction_pct: float = Field(
+        ge=0,
+        le=100,
+        default=0
+    )
+
+
+@router.post("/transition-scenario")
+def transition_scenario(x: TransitionScenario):
+
+    # Current emissions
+    current_fuel_co2e = (
+        x.fuel_consumption * 2.75
+    )
+
+    current_electricity_co2e = (
+        x.electricity_kwh * 0.70
+    )
+
+    current_total_co2e = (
+        current_fuel_co2e
+        + current_electricity_co2e
+    )
+
+    # Reduced consumption after intervention
+    future_fuel_consumption = (
+        x.fuel_consumption
+        * (1 - x.fuel_reduction_pct / 100)
+    )
+
+    future_electricity_kwh = (
+        x.electricity_kwh
+        * (1 - x.electricity_reduction_pct / 100)
+    )
+
+    # Future emissions
+    future_fuel_co2e = (
+        future_fuel_consumption * 2.75
+    )
+
+    future_electricity_co2e = (
+        future_electricity_kwh * 0.70
+    )
+
+    future_total_co2e = (
+        future_fuel_co2e
+        + future_electricity_co2e
+    )
+
+    # Environmental benefit
+    emission_reduction = (
+        current_total_co2e
+        - future_total_co2e
+    )
+
+    reduction_pct = (
+        emission_reduction
+        / current_total_co2e
+        * 100
+        if current_total_co2e > 0
+        else 0
+    )
+
+    current_intensity = (
+        current_total_co2e
+        / x.annual_output
+    )
+
+    future_intensity = (
+        future_total_co2e
+        / x.annual_output
+    )
+
+    # Environmental return on financing
+    co2e_reduction_per_finance = (
+        emission_reduction
+        / x.financing_amount
+        if x.financing_amount > 0
+        else 0
+    )
+
+    return {
+        "status": "success",
+        "sector": x.sector,
+
+        "financing_amount": round(
+            x.financing_amount,
+            2
+        ),
+
+        "baseline": {
+            "fuel_consumption": round(
+                x.fuel_consumption,
+                2
+            ),
+            "electricity_kwh": round(
+                x.electricity_kwh,
+                2
+            ),
+            "estimated_co2e": round(
+                current_total_co2e,
+                2
+            ),
+            "emission_intensity": round(
+                current_intensity,
+                4
+            )
+        },
+
+        "intervention": {
+            "fuel_reduction_pct": round(
+                x.fuel_reduction_pct,
+                2
+            ),
+            "electricity_reduction_pct": round(
+                x.electricity_reduction_pct,
+                2
+            )
+        },
+
+        "projected": {
+            "fuel_consumption": round(
+                future_fuel_consumption,
+                2
+            ),
+            "electricity_kwh": round(
+                future_electricity_kwh,
+                2
+            ),
+            "estimated_co2e": round(
+                future_total_co2e,
+                2
+            ),
+            "emission_intensity": round(
+                future_intensity,
+                4
+            )
+        },
+
+        "environmental_impact": {
+            "co2e_reduction": round(
+                emission_reduction,
+                2
+            ),
+            "reduction_pct": round(
+                reduction_pct,
+                2
+            ),
+            "co2e_reduction_per_unit_finance": round(
+                co2e_reduction_per_finance,
+                6
+            )
+        },
+
+        "method": (
+            "Scenario-based estimation using assumed "
+            "fuel and electricity reduction percentages"
+        ),
+
+        "important_note": (
+            "This is a screening-level transition scenario. "
+            "It assumes the stated reductions are achieved "
+            "and does not constitute a verified emissions "
+            "reduction, carbon credit calculation, or "
+            "formal green-finance impact assessment."
+        )
+    }
