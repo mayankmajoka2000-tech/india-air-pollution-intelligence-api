@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system tools needed to download and extract the ML model
+# Install system tools needed to download and extract files
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl unzip \
     && rm -rf /var/lib/apt/lists/*
@@ -15,8 +15,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
-# Create model directory
-RUN mkdir -p /app/data/models
+# Create data directories
+RUN mkdir -p /app/data /app/data/models
+
+# Download synthetic India air-quality dataset
+RUN curl -L \
+    -o /app/data/india_air_quality_total_320000.csv \
+    https://github.com/mayankmajoka2000-tech/india-air-pollution-intelligence-api/releases/download/v5.0.0-data/india_air_quality_total_320000.csv
 
 # Download trained Random Forest model
 RUN curl -L \
