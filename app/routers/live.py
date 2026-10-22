@@ -22,7 +22,7 @@ def _meta(data):
     if meta["mode"] == "snapshot":
         meta["snapshot_as_of"] = data.get("snapshot_as_of")
         meta["note"] = ("Saved CPCB snapshot: the live data.gov.in feed can't be reached from this server "
-                        "(data.gov.in refuses connections from outside India). Refreshed regularly from India.")
+                        "(data.gov.in refuses connections from outside India). Readings are as of snapshot_as_of.")
         return meta
     if data["using_sample_key"]:
         meta["note"] = ("Public sample key: max 10 rows per request. Set "
