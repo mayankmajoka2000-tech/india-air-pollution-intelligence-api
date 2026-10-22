@@ -132,7 +132,9 @@ def test_live_readings_pollutant_filter(mocked_feed):
     assert body["count"] == 1 and body["readings"][0]["pollutant"] == "O3"
 
 
-def test_live_unavailable(monkeypatch):
+def test_live_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setattr(cpcb, "SNAPSHOT_PATH", tmp_path / "none.json")
+
     def handler(request):
         return httpx.Response(502)
     monkeypatch.setattr(cpcb, "client", cpcb.CPCBClient(transport=httpx.MockTransport(handler)))
@@ -145,3 +147,32 @@ def test_concentration_mode(mocked_feed, monkeypatch):
     st = {s["station"]: s for s in client.get("/live/stations").json()["stations"]}
     # PM2.5 236 ug/m3 -> 389 via breakpoints
     assert st["Sector 11, Faridabad - HSPCB"]["aqi"] == sub_index("PM2.5", 236)
+
+
+def test_snapshot_fallback(monkeypatch, tmp_path):
+    snap = tmp_path / "snap.json"
+    snap.write_text(__import__("json").dumps({"fetched_at": "2026-10-22T16:00:00+00:00",
+                                               "feed_updated": "2026-10-22T16:02:50Z", "total": 7,
+                                               "records": FEED["records"]}))
+    monkeypatch.setattr(cpcb, "SNAPSHOT_PATH", snap)
+
+    def handler(request):
+        raise httpx.ConnectError("No route to host")
+    monkeypatch.setattr(cpcb, "client", cpcb.CPCBClient(transport=httpx.MockTransport(handler)))
+    r = client.get("/live/stations")
+    assert r.status_code == 200
+    b = r.json()
+    assert b["mode"] == "snapshot" and b["snapshot_as_of"] == "2026-10-22T16:02:50Z"
+    assert {s["station"] for s in b["stations"]} == {"Sector 11, Faridabad - HSPCB", "Anand Vihar, Delhi - DPCC"}
+    assert client.get("/live/status").json()["status"] == "snapshot"
+    d = client.get("/live/stations", params={"state": "Delhi"}).json()
+    assert d["count"] == 1
+
+
+def test_no_snapshot_still_503(monkeypatch, tmp_path):
+    monkeypatch.setattr(cpcb, "SNAPSHOT_PATH", tmp_path / "missing.json")
+
+    def handler(request):
+        raise httpx.ConnectError("No route to host")
+    monkeypatch.setattr(cpcb, "client", cpcb.CPCBClient(transport=httpx.MockTransport(handler)))
+    assert client.get("/live/stations").status_code == 503

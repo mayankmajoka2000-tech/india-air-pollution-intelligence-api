@@ -18,6 +18,12 @@ def _load(state, city):
 def _meta(data):
     meta = {k: data[k] for k in ("fetched_at", "feed_total", "rows_returned",
                                  "using_sample_key", "cached", "source")}
+    meta["mode"] = data.get("mode", "live")
+    if meta["mode"] == "snapshot":
+        meta["snapshot_as_of"] = data.get("snapshot_as_of")
+        meta["note"] = ("Saved CPCB snapshot: the live data.gov.in feed can't be reached from this server "
+                        "(data.gov.in refuses connections from outside India). Refreshed regularly from India.")
+        return meta
     if data["using_sample_key"]:
         meta["note"] = ("Public sample key: max 10 rows per request. Set "
                         "DATA_GOV_IN_API_KEY for the full station network.")
@@ -27,7 +33,7 @@ def _meta(data):
 @router.get("/status", summary="Check the CPCB live feed connection")
 def status():
     data = _load(None, None)
-    return {"status": "connected", **_meta(data)}
+    return {"status": "connected" if data.get("mode", "live") == "live" else "snapshot", **_meta(data)}
 
 
 @router.get("/readings", summary="Raw pollutant readings from CPCB stations")

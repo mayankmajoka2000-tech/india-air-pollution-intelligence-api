@@ -31,6 +31,12 @@ environment variable (on Render: *Environment → Add Environment Variable*):
 DATA_GOV_IN_API_KEY=your_key_here
 ```
 
+**Hosting note:** data.gov.in refuses connections from servers outside India (tested from Render's Oregon and
+Singapore regions). When the live feed can't be reached, `/live/*` serves the saved snapshot in
+`data/cpcb_snapshot.json` and says so (`"mode": "snapshot"`, `snapshot_as_of`). Refresh it from a machine in India:
+`DATA_GOV_IN_API_KEY=... python scripts/refresh_cpcb_snapshot.py`, or from the CSV on the data.gov.in resource page:
+`python scripts/refresh_cpcb_snapshot.py --from-csv file.csv`.
+
 Without a key the API falls back to data.gov.in's public sample key, which returns only 10 rows.
 Responses are cached for 15 minutes (`CPCB_CACHE_SECONDS`). If data.gov.in is down the endpoints
 return HTTP 503 with the reason; they never fall back to synthetic data.
