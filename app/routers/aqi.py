@@ -1,12 +1,52 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-router=APIRouter(prefix="/aqi",tags=["AQI"])
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from app.services.cpcb_aqi import (AVERAGING, BREAKPOINTS, INDEX_BANDS, UNITS,
+                                   calculate_cpcb_aqi, category, sub_index)
+
+router = APIRouter(prefix="/aqi", tags=["AQI"])
+
+
 class Pollutants(BaseModel):
-    pm25:float=0; pm10:float=0; no2:float=0; so2:float=0; co:float=0; o3:float=0; nh3:float=0; pb:float=0
+    """Concentrations: CO in mg/m3, all others in ug/m3. Omit pollutants not measured."""
+    pm25: float | None = Field(None, ge=0, description="PM2.5, 24-h avg, ug/m3")
+    pm10: float | None = Field(None, ge=0, description="PM10, 24-h avg, ug/m3")
+    no2: float | None = Field(None, ge=0, description="NO2, 24-h avg, ug/m3")
+    so2: float | None = Field(None, ge=0, description="SO2, 24-h avg, ug/m3")
+    co: float | None = Field(None, ge=0, description="CO, 8-h avg, mg/m3")
+    o3: float | None = Field(None, ge=0, description="O3, 8-h avg, ug/m3")
+    nh3: float | None = Field(None, ge=0, description="NH3, 24-h avg, ug/m3")
+    pb: float | None = Field(None, ge=0, description="Pb, 24-h avg, ug/m3")
+
+
 def cat(a):
-    return "Good" if a<=50 else "Satisfactory" if a<=100 else "Moderate" if a<=200 else "Poor" if a<=300 else "Very Poor" if a<=400 else "Severe"
-@router.post("/calculate")
-def calculate(p:Pollutants):
-    scores={"PM2.5":min(p.pm25*2,500),"PM10":min(p.pm10,500),"NO2":min(p.no2*1.5,500),"SO2":min(p.so2*2,500),"CO":min(p.co*50,500),"O3":min(p.o3*1.5,500),"NH3":min(p.nh3*2,500),"Pb":min(p.pb*100,500)}
-    a=max(scores.values())
-    return {"aqi":round(a),"category":cat(a),"pollutant_scores":scores,"note":"Use official CPCB breakpoint tables for regulated production scoring."}
+    """Kept for backward compatibility."""
+    return category(a)
+
+
+@router.post("/calculate", summary="CPCB National AQI from concentrations")
+def calculate(p: Pollutants):
+    result = calculate_cpcb_aqi(p.model_dump())
+    result["method"] = "CPCB National Air Quality Index breakpoints (CUPS/82/2014-15)"
+    return result
+
+
+@router.get("/sub-index", summary="Sub-index for a single pollutant")
+def single(pollutant: str = Query(..., examples=["PM2.5"]),
+           concentration: float = Query(..., ge=0)):
+    try:
+        si = sub_index(pollutant, concentration)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"pollutant": pollutant, "concentration": concentration,
+            "sub_index": si, "category": category(si)}
+
+
+@router.get("/breakpoints", summary="Official CPCB breakpoint table")
+def breakpoints():
+    return {
+        p: {"unit": UNITS[p], "averaging": AVERAGING[p],
+            "bands": [{"index": f"{lo}-{hi}", "concentration": [b_lo, b_hi]}
+                      for (lo, hi), (b_lo, b_hi) in zip(INDEX_BANDS, bands)]}
+        for p, bands in BREAKPOINTS.items()
+    }

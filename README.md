@@ -6,7 +6,38 @@
 
 ❤️ **Health Check:** https://india-air-pollution-intelligence-api.onrender.com/health
 
-📊 **Dataset:** 320,000 synthetic India-level air-quality records
+📊 **Data:** live CPCB station readings via data.gov.in (`/live/*`) + a 320,000-record synthetic development dataset (`/data/*`)
+
+## Live CPCB data (real observations)
+
+The `/live` endpoints pull **real-time readings from CPCB's continuous ambient air quality
+monitoring stations** through the Open Government Data Platform India
+([data.gov.in resource 3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69](https://data.gov.in/resource/real-time-air-quality-index-various-locations),
+GODL licence), and compute AQI with the **official CPCB National AQI breakpoints**.
+
+| Endpoint | What it returns |
+|---|---|
+| `GET /live/status` | Feed connection check, row counts, source and licence |
+| `GET /live/readings?state=&city=&pollutant=` | Raw pollutant readings (24-h min / max / avg) per station |
+| `GET /live/stations?state=&city=` | Station AQI, category and prominent pollutant, ranked worst-first |
+| `GET /live/cities?state=` | City ranking: mean / max station AQI and worst station |
+| `POST /aqi/calculate` | AQI from concentrations using CPCB breakpoints and the 3-pollutant rule |
+| `GET /aqi/breakpoints` | The CPCB breakpoint table |
+
+**Setup:** register free at [data.gov.in](https://data.gov.in), copy your API key, and set it as an
+environment variable (on Render: *Environment → Add Environment Variable*):
+
+```
+DATA_GOV_IN_API_KEY=your_key_here
+```
+
+Without a key the API falls back to data.gov.in's public sample key, which returns only 10 rows.
+Responses are cached for 15 minutes (`CPCB_CACHE_SECONDS`). If data.gov.in is down the endpoints
+return HTTP 503 with the reason; they never fall back to synthetic data.
+
+Every response carries `source`, `fetched_at` and `using_sample_key` fields so the provenance of each
+number is explicit.
+
 # India Air Pollution Intelligence API — ULTIMATE v5.0
 
 ## Run
@@ -18,8 +49,9 @@ Swagger: http://127.0.0.1:8000/docs
 ## Docker
 docker compose up --build
 
-## Dataset
-`data/india_air_quality_total_320000.csv` contains 320,000 synthetic development records.
+## Synthetic development dataset
+`data/india_air_quality_total_320000.csv` contains 320,000 synthetic development records, used by
+the `/data`, forecasting and ML-training modules.
 They are NOT official CPCB measurements. For production analytics, ingest verified observations
 and preserve source, station, timestamp, QC and licensing provenance.
 
