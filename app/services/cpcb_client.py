@@ -22,8 +22,10 @@ Configuration (environment variables):
 """
 from __future__ import annotations
 
+import json
 import os
 import time
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
@@ -47,6 +49,9 @@ POLLUTANT_MAP = {
     "PM2.5": "PM2.5", "PM10": "PM10", "NO2": "NO2", "SO2": "SO2",
     "CO": "CO", "OZONE": "O3", "O3": "O3", "NH3": "NH3", "PB": "Pb",
 }
+
+
+SNAPSHOT_PATH = Path(__file__).resolve().parents[2] / "data" / "cpcb_snapshot.json"
 
 
 class CPCBUnavailable(RuntimeError):
@@ -127,6 +132,18 @@ class CPCBClient:
 
     def fetch(self, state: str | None = None, city: str | None = None,
               max_rows: int = 5000) -> dict:
+        """Live rows if data.gov.in is reachable, otherwise the saved CPCB snapshot."""
+        try:
+            return self.fetch_live(state, city, max_rows)
+        except CPCBUnavailable as exc:
+            snap = load_snapshot(state, city)
+            if snap is None:
+                raise
+            snap["live_error"] = str(exc)
+            return snap
+
+    def fetch_live(self, state: str | None = None, city: str | None = None,
+                   max_rows: int = 5000) -> dict:
         """Fetch normalised rows, paging through the feed. Cached per filter."""
         cache_key = (state, city, max_rows)
         hit = self._cache.get(cache_key)
@@ -162,9 +179,38 @@ class CPCBClient:
             "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "source": SOURCE,
             "cached": False,
+            "mode": "live",
         }
         self._cache[cache_key] = (time.time(), result)
         return result
+
+
+def load_snapshot(state: str | None = None, city: str | None = None, path: Path | None = None) -> dict | None:
+    """
+    Saved copy of the CPCB feed (data/cpcb_snapshot.json), used when data.gov.in cannot be reached.
+    data.gov.in refuses connections from servers outside India, so the hosted API reads this file;
+    it is refreshed from a machine in India with scripts/refresh_cpcb_snapshot.py.
+    """
+    path = path or SNAPSHOT_PATH
+    if not path.exists():
+        return None
+    snap = json.loads(path.read_text(encoding="utf-8"))
+    rows = [r for r in (normalise_record(x) for x in snap.get("records", [])) if r]
+    if state:
+        rows = [r for r in rows if r["state"].lower() == state.replace("_", " ").lower()]
+    if city:
+        rows = [r for r in rows if r["city"].lower() == city.lower()]
+    return {
+        "rows": rows,
+        "feed_total": snap.get("total"),
+        "rows_returned": len(rows),
+        "using_sample_key": False,
+        "fetched_at": snap.get("fetched_at"),
+        "source": SOURCE,
+        "cached": True,
+        "mode": "snapshot",
+        "snapshot_as_of": snap.get("feed_updated") or snap.get("fetched_at"),
+    }
 
 
 # ---------------------------------------------------------------- analytics
