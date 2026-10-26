@@ -8,11 +8,11 @@ def test_emission():
     assert r.json()["net"]==150
 
 
-def test_root_redirects_browsers_to_docs():
+def test_root_serves_landing_page_to_browsers():
     from fastapi.testclient import TestClient
     from app.main import app
     c = TestClient(app)
-    r = c.get("/", headers={"accept": "text/html,application/xhtml+xml"}, follow_redirects=False)
-    assert r.status_code == 307 and r.headers["location"] == "/docs"
+    r = c.get("/", headers={"accept": "text/html,application/xhtml+xml"})
+    assert r.status_code == 200 and "India's air" in r.text and 'href="/docs"' in r.text
     j = c.get("/", headers={"accept": "application/json"})
     assert j.status_code == 200 and j.json()["status"] == "operational"

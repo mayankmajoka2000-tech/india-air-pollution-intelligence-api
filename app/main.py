@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from pathlib import Path
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import health, india, emissions, aqi, monitoring, forecast, policy, msme, analytics, gis, auth, data, alerts, health_impact, source_attribution, live
 
 app = FastAPI(
-    title="India Air Pollution Intelligence API — ULTIMATE",
+    title="India Air Pollution Intelligence API",
+    swagger_ui_parameters={"deepLinking": True, "displayRequestDuration": True, "syntaxHighlight.theme": "obsidian"},
     version="5.0.0",
     description="India-scale air pollution intelligence platform covering monitoring, emissions, AQI, forecasting, GIS, source attribution, policy, MSMEs, health/economic impacts, alerts and ML."
 )
@@ -16,12 +18,15 @@ for r in [health.router, india.router, emissions.router, aqi.router, monitoring.
           auth.router, data.router, alerts.router, health_impact.router, source_attribution.router, live.router]:
     app.include_router(r)
 
-@app.get("/")
+_LANDING = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/", include_in_schema=False)
 def root(request: Request):
-    # Browsers go straight to the interactive docs, so the main link shows every endpoint.
+    # Browsers get the landing page (live map, rankings, module guide, links to /docs).
     # API clients (curl, scripts) still get the JSON status below.
     if "text/html" in request.headers.get("accept", ""):
-        return RedirectResponse(url="/docs", status_code=307)
+        return HTMLResponse(_LANDING)
     return {
         "name": "India Air Pollution Intelligence API",
         "version": "5.0.0",

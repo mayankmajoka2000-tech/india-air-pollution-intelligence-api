@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>India Air Pollution Intelligence API</title>
+<meta name="description" content="Real CPCB station data, official AQI, forecasting, GIS, policy and MSME analytics for India, as one open REST API.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#0b0f14; --bg2:#10161d; --panel:#131a22; --line:#232d38; --ink:#e8edf2; --muted:#93a1b0; --faint:#5f6d7b;
+  --accent:#7fd1ae; --accent-ink:#06130d;
+  --good:#2fa36b; --sat:#9bcf4b; --mod:#f2c94c; --poor:#f2994a; --vpoor:#e5484d; --sev:#9b2c4a;
+  --display:"Fraunces",Georgia,serif; --body:"Inter Tight",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+/* nav */
+nav{position:sticky;top:0;z-index:1000;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;text-decoration:none;white-space:nowrap}
+.brand i{width:22px;height:22px;border-radius:50%;background:conic-gradient(var(--good),var(--sat),var(--mod),var(--poor),var(--vpoor),var(--sev),var(--good));box-shadow:0 0 18px #7fd1ae55}
+.links{display:flex;gap:18px;margin-left:auto;font-size:14px;color:var(--muted)}
+.links a{text-decoration:none}.links a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;font:600 14px var(--body);text-decoration:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:hover{filter:brightness(1.08)}
+@media (max-width:760px){.links{display:none}}
+/* hero */
+.hero{position:relative;padding:72px 0 40px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:-40% -10% auto auto;width:820px;height:820px;background:radial-gradient(circle at center,#e5484d22,#f2994a14 35%,transparent 65%);pointer-events:none}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid #7fd1ae44;padding:5px 10px;border-radius:999px}
+.eyebrow b{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+h1{font:700 clamp(40px,7vw,80px)/1.02 var(--display);letter-spacing:-.02em;margin:18px 0 16px;max-width:14ch}
+h1 em{font-style:normal;background:linear-gradient(90deg,var(--mod),var(--poor) 45%,var(--vpoor));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(17px,2vw,20px);color:var(--muted);max-width:60ch;margin:0 0 28px}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:48px}
+.stat{background:var(--bg2);padding:20px}
+.stat .v{font:700 clamp(28px,4vw,40px)/1.1 var(--display);font-variant-numeric:tabular-nums}
+.stat .l{font-size:13px;color:var(--muted);margin-top:4px}
+@media (max-width:720px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.asof{font:12px var(--mono);color:var(--faint);margin-top:12px}
+/* sections */
+section{padding:56px 0}
+.sh{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+h2{font:700 clamp(28px,4vw,40px)/1.1 var(--display);letter-spacing:-.01em;margin:0}
+.sub{color:var(--muted);margin:6px 0 0;max-width:62ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+/* map */
+.mapgrid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px}
+@media (max-width:900px){.mapgrid{grid-template-columns:minmax(0,1fr)}}
+#map{height:560px;border-radius:var(--r);border:1px solid var(--line);background:#0e141a}
+@media (max-width:600px){#map{height:420px}}
+.leaflet-container{font-family:var(--body)}
+.leaflet-control-attribution{background:#0b0f14cc!important;color:var(--faint)!important}.leaflet-control-attribution a{color:var(--muted)!important}
+.leaflet-bar a{background:var(--panel)!important;color:var(--ink)!important;border-color:var(--line)!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+.leaflet-popup-content{margin:12px 14px;font-size:13px;line-height:1.45}
+.pop b{font-size:14px}.pop .a{font:700 26px var(--display)}
+.side{display:flex;flex-direction:column;gap:16px}
+.side .panel{padding:16px}
+.label{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.legend{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.lg{display:grid;grid-template-columns:12px 1fr auto;align-items:center;gap:10px;font-size:13px}
+.lg i{width:12px;height:12px;border-radius:50%}
+.lg span:last-child{font:12px var(--mono);color:var(--muted)}
+.dist{display:flex;height:10px;border-radius:6px;overflow:hidden;margin-top:12px;background:var(--line)}
+.search{width:100%;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--ink);font:15px var(--body)}
+.search:focus{outline:2px solid var(--accent);outline-offset:1px}
+.results{max-height:190px;overflow:auto;margin-top:10px;display:flex;flex-direction:column;gap:4px}
+.res{display:flex;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13px}
+.res:hover{background:var(--bg2)}
+/* ranking */
+.rankgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){.rankgrid{grid-template-columns:minmax(0,1fr)}}
+.rank{padding:18px}
+.row{display:grid;grid-template-columns:26px minmax(0,1fr) 56px;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.row .n{font:12px var(--mono);color:var(--faint)}
+.row .c{min-width:0}.row .c div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .c small{color:var(--muted);font-size:12px}
+.bar{height:6px;border-radius:4px;background:var(--line);margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;border-radius:4px}
+.row .aq{font:700 20px var(--display);text-align:right;font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:6px}
+.tab{padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font:500 13px var(--body);cursor:pointer}
+.tab[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.insight{padding:20px;display:flex;flex-direction:column;gap:14px}
+.insight p{margin:0;color:var(--muted)}.insight strong{color:var(--ink)}
+.big{font:700 54px/1 var(--display)}
+/* modules */
+.mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.mod{padding:18px;text-decoration:none;display:flex;flex-direction:column;gap:8px;transition:border-color .15s,transform .15s}
+.mod:hover{border-color:var(--accent);transform:translateY(-2px)}
+.mod .t{display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.mod .t span{font:12px var(--mono);color:var(--accent)}
+.mod p{margin:0;color:var(--muted);font-size:14px}
+.mod code{font:12px var(--mono);color:var(--faint)}
+.new{font:600 10px var(--mono);letter-spacing:.06em;background:var(--accent);color:var(--accent-ink);padding:2px 6px;border-radius:4px;margin-left:6px}
+/* code */
+.codegrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){.codegrid{grid-template-columns:minmax(0,1fr)}}
+.code{overflow:hidden}
+.code header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.code pre{margin:0;padding:16px;overflow:auto;font:13px/1.6 var(--mono);color:#cfe3d8}
+.copy{font:500 12px var(--mono);background:transparent;border:1px solid var(--line);color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer}
+.k{color:#f2c94c}.s{color:#7fd1ae}.cm{color:var(--faint)}
+/* footer */
+footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .6s,transform .6s}.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.eyebrow b{animation:none}html{scroll-behavior:auto}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <a class="brand" href="/"><i></i>India Air Intelligence</a>
+  <div class="links"><a href="#map-sec">Live map</a><a href="#rank-sec">Rankings</a><a href="#modules">Modules</a><a href="#quickstart">Quick start</a></div>
+  <a class="btn primary" href="/docs">API Docs →</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <span class="eyebrow"><b></b>Real CPCB data · v5.0</span>
+  <h1>India's air, <em>as an API.</em></h1>
+  <p class="lede">Station-level readings from the Central Pollution Control Board, official CPCB AQI, ML forecasting, GIS hotspots, policy simulation and MSME analytics. One open REST API, 40+ endpoints.</p>
+  <div class="cta">
+    <a class="btn primary" href="/docs">Explore the API</a>
+    <a class="btn" href="#map-sec">See the live map</a>
+    <a class="btn" href="https://github.com/mayankmajoka2000-tech/india-air-pollution-intelligence-api" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="v" id="s-st">–</div><div class="l">monitoring stations</div></div>
+    <div class="stat"><div class="v" id="s-states">–</div><div class="l">states &amp; UTs</div></div>
+    <div class="stat"><div class="v" id="s-read">–</div><div class="l">pollutant readings</div></div>
+    <div class="stat"><div class="v" id="s-worst">–</div><div class="l" id="s-worst-l">highest AQI</div></div>
+  </div>
+  <div class="asof" id="asof">Loading CPCB data… the free server can take up to a minute to wake up.</div>
+</div></header>
+
+<section id="map-sec" class="reveal"><div class="wrap">
+  <div class="sh"><div><h2>Every station, coloured by AQI</h2><p class="sub">Each dot is a CPCB continuous monitoring station. Tap one for its AQI, category and the pollutant driving it.</p></div></div>
+  <div class="mapgrid">
+    <div id="map" role="img" aria-label="Map of India's air quality monitoring stations coloured by AQI"></div>
+    <div class="side">
+      <div class="panel">
+        <div class="label">CPCB AQI scale</div>
+        <div class="legend" id="legend"></div>
+        <div class="dist" id="dist" aria-label="Share of stations in each AQI category"></div>
+      </div>
+      <div class="panel">
+        <div class="label">Find a city or station</div>
+        <input class="search" id="q" placeholder="e.g. Bhopal, Delhi, Mumbai" autocomplete="off" style="margin-top:10px">
+        <div class="results" id="results"></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section id="rank-sec" class="reveal"><div class="wrap">
+  <div class="sh">
+    <div><h2>City rankings</h2><p class="sub">Mean station AQI per city, from <code style="font-family:var(--mono);font-size:14px">/live/cities</code>.</p></div>
+    <div class="tabs"><button class="tab" aria-pressed="true" data-o="worst">Most polluted</button><button class="tab" aria-pressed="false" data-o="best">Cleanest</button></div>
+  </div>
+  <div class="rankgrid">
+    <div class="panel rank" id="rank"></div>
+    <div class="panel insight" id="insight"></div>
+  </div>
+</div></section>
+
+<section id="modules" class="reveal"><div class="wrap">
+  <div class="sh"><div><h2>What's inside</h2><p class="sub">Sixteen modules, each documented and testable in the browser. Click one to open it in the docs.</p></div><a class="btn" href="/docs">All endpoints →</a></div>
+  <div class="mods" id="mods"></div>
+</div></section>
+
+<section id="quickstart" class="reveal"><div class="wrap">
+  <div class="sh"><div><h2>Quick start</h2><p class="sub">No key needed. Call it from anywhere.</p></div></div>
+  <div class="codegrid">
+    <div class="panel code"><header><span class="label">cURL</span><button class="copy" data-c="c1">Copy</button></header>
+<pre id="c1"><span class="cm"># 10 worst stations in Delhi right now</span>
+curl "<span class="s" data-base>BASE</span>/live/stations?state=Delhi&amp;limit=10"
+
+<span class="cm"># Official CPCB AQI from concentrations</span>
+curl -X POST "<span class="s" data-base>BASE</span>/aqi/calculate" \
+  -H "Content-Type: application/json" \
+  -d '{"pm25": 92, "pm10": 180, "no2": 45}'</pre></div>
+    <div class="panel code"><header><span class="label">Python</span><button class="copy" data-c="c2">Copy</button></header>
+<pre id="c2"><span class="k">import</span> requests
+
+BASE = <span class="s">"<span data-base>BASE</span>"</span>
+cities = requests.get(<span class="s">f"{BASE}/live/cities"</span>,
+                      params={<span class="s">"limit"</span>: 5}).json()
+
+<span class="k">for</span> c <span class="k">in</span> cities[<span class="s">"cities"</span>]:
+    print(c[<span class="s">"city"</span>], c[<span class="s">"mean_aqi"</span>], c[<span class="s">"category"</span>])</pre></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <div>Data: <a href="https://data.gov.in/resource/real-time-air-quality-index-various-locations" target="_blank" rel="noopener">CPCB via data.gov.in</a> · Government Open Data Licence – India</div>
+  <div>Built by Mayank Majoka · <a href="https://github.com/mayankmajoka2000-tech/india-air-pollution-intelligence-api" target="_blank" rel="noopener">Source on GitHub</a> · <a href="/docs">Docs</a> · <a href="/redoc">ReDoc</a></div>
+</div></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const CATS=[["Good","--good","0–50"],["Satisfactory","--sat","51–100"],["Moderate","--mod","101–200"],["Poor","--poor","201–300"],["Very Poor","--vpoor","301–400"],["Severe","--sev","401–500"]];
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const color=cat=>{const c=CATS.find(x=>x[0]===cat);return c?css(c[1]):"#5f6d7b"};
+const fmt=n=>Number(n).toLocaleString("en-IN");
+document.querySelectorAll("[data-base]").forEach(e=>e.textContent=location.origin);
+
+/* reveal on scroll */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}}),{threshold:.08});
+document.querySelectorAll(".reveal").forEach(e=>io.observe(e));
+
+/* legend */
+$("legend").innerHTML=CATS.map(([n,v,r])=>`<div class="lg"><i style="background:var(${v})"></i><span>${n}</span><span>${r}</span></div>`).join("");
+
+/* map */
+let map=null,markers=[];
+if(window.L){
+  map=L.map("map",{zoomControl:true,scrollWheelZoom:false,attributionControl:true}).setView([22.8,80.5],innerWidth<600?4:5);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:12,attribution:'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'}).addTo(map);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:12,pane:"overlayPane",opacity:.7}).addTo(map);
+  map.on("click",()=>map.scrollWheelZoom.enable());
+}
+
+function pop(s){
+  return `<div class="pop"><b>${esc(s.station)}</b><br><span style="color:var(--muted)">${esc(s.city)}, ${esc(s.state)}</span><br>
+  <span class="a" style="color:${color(s.category)}">${s.aqi??"–"}</span> <span>${esc(s.category||"No valid AQI")}</span><br>
+  ${s.prominent_pollutant?`Driven by <b>${esc(s.prominent_pollutant)}</b>`:""}</div>`;
+}
+
+async function getJSON(u){const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()}
+
+let stations=[];
+getJSON("/live/stations?limit=1000").then(d=>{
+  stations=d.stations||[];
+  const valid=stations.filter(s=>s.aqi!=null);
+  const states=new Set(stations.map(s=>s.state));
+  $("s-st").textContent=fmt(stations.length);
+  $("s-states").textContent=states.size;
+  $("s-read").textContent=fmt(d.feed_total||d.rows_returned||0);
+  const w=valid[0];
+  if(w){$("s-worst").textContent=w.aqi;$("s-worst").style.color=color(w.category);$("s-worst-l").textContent=`highest AQI · ${w.city}`}
+  const asOf=d.snapshot_as_of||d.fetched_at;
+  $("asof").textContent=(d.mode==="snapshot"?"CPCB snapshot as of ":"Live CPCB feed · updated ")+asOf+" · "+fmt(valid.length)+" stations with a valid AQI";
+  /* distribution */
+  const counts=CATS.map(([n])=>valid.filter(s=>s.category===n).length);
+  $("dist").innerHTML=CATS.map(([n,v],i)=>counts[i]?`<i title="${n}: ${counts[i]}" style="flex:${counts[i]};background:var(${v})"></i>`:"").join("");
+  document.querySelectorAll("#legend .lg span:last-child").forEach((e,i)=>e.textContent=counts[i]+" stations");
+  /* markers, worst drawn last so they sit on top */
+  if(map){
+    [...stations].reverse().forEach(s=>{
+      if(s.latitude==null||s.longitude==null)return;
+      const m=L.circleMarker([s.latitude,s.longitude],{radius:s.aqi>300?7:5.5,weight:1,color:"#0b0f14",fillColor:color(s.category),fillOpacity:s.aqi==null?.35:.9}).bindPopup(pop(s));
+      m.addTo(map);markers.push([s,m]);
+    });
+  }
+  insight(valid);
+}).catch(()=>{$("asof").textContent="Couldn't load station data. Refresh in a moment; the server may still be waking up."});
+
+/* search */
+$("q").addEventListener("input",e=>{
+  const q=e.target.value.trim().toLowerCase();
+  if(q.length<2){$("results").innerHTML="";return}
+  const hits=stations.filter(s=>(s.city+" "+s.station+" "+s.state).toLowerCase().includes(q)).slice(0,30);
+  $("results").innerHTML=hits.length?hits.map((s,i)=>`<div class="res" data-i="${stations.indexOf(s)}" tabindex="0"><span>${esc(s.station.split(" - ")[0])}<br><small style="color:var(--muted)">${esc(s.city)}</small></span><b style="color:${color(s.category)}">${s.aqi??"–"}</b></div>`).join(""):`<div class="res" style="cursor:default;color:var(--muted)">No match</div>`;
+});
+$("results").addEventListener("click",e=>{
+  const r=e.target.closest("[data-i]");if(!r||!map)return;
+  const s=stations[+r.dataset.i];const mk=markers.find(([x])=>x===s);
+  map.flyTo([s.latitude,s.longitude],10,{duration:1});if(mk)setTimeout(()=>mk[1].openPopup(),1000);
+  $("map").scrollIntoView({behavior:"smooth",block:"center"});
+});
+
+/* rankings */
+let cities=[];
+function renderRank(order){
+  const list=cities.filter(c=>c.mean_aqi!=null);
+  const pick=order==="best"?[...list].sort((a,b)=>a.mean_aqi-b.mean_aqi).slice(0,10):list.slice(0,10);
+  $("rank").innerHTML=pick.map((c,i)=>`<div class="row"><span class="n">${String(i+1).padStart(2,"0")}</span>
+    <div class="c"><div><b>${esc(c.city)}</b> <small>${esc(c.state)} · ${c.stations} station${c.stations>1?"s":""}</small></div>
+    <div class="bar"><i style="width:${Math.min(100,c.mean_aqi/5)}%;background:${color(c.category)}"></i></div></div>
+    <span class="aq" style="color:${color(c.category)}">${c.mean_aqi}</span></div>`).join("");
+}
+getJSON("/live/cities?limit=500").then(d=>{cities=d.cities||[];renderRank("worst")}).catch(()=>{$("rank").innerHTML='<p style="color:var(--muted)">Rankings unavailable right now.</p>'});
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-pressed",x===t));renderRank(t.dataset.o)}));
+
+function insight(valid){
+  const bad=valid.filter(s=>s.aqi>200).length, share=Math.round(bad/valid.length*100);
+  const pm=valid.filter(s=>/PM/.test(s.prominent_pollutant||"")).length, pmShare=Math.round(pm/valid.length*100);
+  const delhi=valid.filter(s=>s.state==="Delhi"), dAvg=delhi.length?Math.round(delhi.reduce((a,s)=>a+s.aqi,0)/delhi.length):null;
+  $("insight").innerHTML=`<div class="label">What the data says</div>
+    <div><div class="big" style="color:var(--poor)">${share}%</div><p>of stations were in the <strong>Poor</strong> category or worse (AQI above 200).</p></div>
+    <div><div class="big" style="color:var(--mod)">${pmShare}%</div><p>of stations had <strong>particulate matter</strong> (PM2.5 or PM10) as the main pollutant.</p></div>
+    ${dAvg?`<div><div class="big" style="color:${color(CATS[[50,100,200,300,400,1e9].findIndex(x=>dAvg<=x)][0])}">${dAvg}</div><p>average AQI across <strong>Delhi's ${delhi.length} stations</strong>.</p></div>`:""}`;
+}
+
+/* modules from the OpenAPI spec */
+const ABOUT={
+ "Live CPCB Data":"Real station readings, station AQI and city rankings from CPCB.",
+ "AQI":"Official CPCB NAQI breakpoints, sub-indices and AQI calculation.",
+ "ML Forecasting":"Random Forest PM2.5 forecasts, retraining and model info.",
+ "Monitoring":"Ingest sensor readings, batch uploads and anomaly detection.",
+ "GIS":"Pollution hotspots, station geography and population exposure.",
+ "Analytics":"National dashboard, state rankings and long-run trends.",
+ "Emissions":"Emission estimates and reduction scenarios by sector.",
+ "Source Attribution":"Split pollution across sources: transport, industry, dust, burning.",
+ "Policy":"Simulate interventions, optimise budgets and compare portfolios.",
+ "MSME":"Pollution assessment, green-finance screening and transition plans for MSMEs.",
+ "Health & Economics":"Health burden and economic cost of exposure.",
+ "Alerts":"Threshold-based alerts for stations and cities.",
+ "India":"States, districts and the administrative hierarchy.",
+ "Data":"Dataset metadata and samples.",
+ "Security":"Token-based authentication.",
+ "System":"Health checks and service status."
+};
+getJSON("/openapi.json").then(spec=>{
+  const tags={};
+  Object.entries(spec.paths).forEach(([p,ops])=>Object.entries(ops).forEach(([m,op])=>(op.tags||["System"]).forEach(t=>(tags[t]=tags[t]||[]).push(m.toUpperCase()+" "+p))));
+  const order=Object.keys(ABOUT).filter(t=>tags[t]).concat(Object.keys(tags).filter(t=>!ABOUT[t]));
+  $("mods").innerHTML=order.map(t=>`<a class="panel mod" href="/docs#/${encodeURIComponent(t)}">
+    <div class="t"><span style="color:var(--ink);font:600 16px var(--body)">${esc(t)}${t==="Live CPCB Data"?'<em class="new">NEW</em>':""}</span><span>${tags[t].length} endpoint${tags[t].length>1?"s":""}</span></div>
+    <p>${esc(ABOUT[t]||"")}</p><code>${esc(tags[t][0])}</code></a>`).join("");
+}).catch(()=>{$("mods").innerHTML='<a class="panel mod" href="/docs"><div class="t">Open the docs</div><p>See every module and endpoint.</p></a>'});
+
+/* copy buttons */
+document.querySelectorAll(".copy").forEach(b=>b.addEventListener("click",()=>{
+  navigator.clipboard?.writeText($(b.dataset.c).innerText).then(()=>{b.textContent="Copied";setTimeout(()=>b.textContent="Copy",1500)});
+}));
+})();
+</script>
+</body>
+</html>
