@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import health, india, emissions, aqi, monitoring, forecast, policy, msme, analytics, gis, auth, data, alerts, health_impact, source_attribution, live
 
@@ -16,7 +17,11 @@ for r in [health.router, india.router, emissions.router, aqi.router, monitoring.
     app.include_router(r)
 
 @app.get("/")
-def root():
+def root(request: Request):
+    # Browsers go straight to the interactive docs, so the main link shows every endpoint.
+    # API clients (curl, scripts) still get the JSON status below.
+    if "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(url="/docs", status_code=307)
     return {
         "name": "India Air Pollution Intelligence API",
         "version": "5.0.0",
